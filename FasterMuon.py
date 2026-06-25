@@ -31,7 +31,7 @@ from collections import defaultdict
 import torch
 from torch import Tensor
  
-__all__ = ["Muon"]
+__all__ = ["FasterMuon"]
  
 # @torch.compile
 def _zeropower_via_newtonschulz5_single(
@@ -82,11 +82,11 @@ def _zeropower_via_newtonschulz5_batched(
     return X
  
  
-class Muon(torch.optim.Optimizer):
+class FasterMuon(torch.optim.Optimizer):
     """
     Muon 优化器，按参数形状分组后用 bmm 批量做 Newton-Schulz 正交化。
  
-    只负责 Muon（>=2D，隐藏层权重）那部分参数。bias、norm、embedding、
+    只负责 Muon（==2D，隐藏层权重）那部分参数。其它的bias、norm、embedding、
     lm_head 这些请照常配一个独立的 torch.optim.AdamW，用法和官方 Muon
     实现完全一致。
     """
@@ -105,7 +105,7 @@ class Muon(torch.optim.Optimizer):
         for p in params:
             if p.ndim != 2:
                 raise ValueError(
-                    f"FastMuon 只支持 2D 参数，但收到了形状 {tuple(p.shape)}"
+                    f"FasterMuon 只支持 2D 参数，但收到了形状 {tuple(p.shape)}"
                 )
         defaults = dict(
             lr=lr,

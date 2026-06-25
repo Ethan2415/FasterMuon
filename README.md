@@ -1,4 +1,21 @@
 # FasterMuon
-This is an optimized implementation for the Muon optimizer, especially if you are training a small model with a very fast forward pass and the model has lots of tensors of the same shape for the Muon to optimize, you shall see it's much more faster than the implementation of pytorch or moonshot or Keller Jordan in terms of per step update time. Muon is well-known for it's token efficiency, but less known for the time-consuming updating algorithm. If the forward pass already consumes a relative long time (e.g. 1~2s), and you have only dozens of params for the Muon to optimize, you may be totally fine with the 100~200ms time consumed by Muon for each update. What I encountered is that I was training a model with very fast forward pass (~200ms), and more than one hundred params to update with Muon, which cost also around ~200ms when I use the implementation of moonshot, while only a few milliseconds is needed if I use standard Adamw. In this case, Muon is no longer training-efficient, motivating me to propose FasterMuon.
 
-What I do is very simple. I just pack the tensor of the same shape into a batched Newton-schulz iteration, and it accelerate the training process a lot. More details can be found in the code. Note: The author only test the code in the DDP training set, other parallel training methods needs to specially modified.
+FasterMuon is an optimized implementation of the Muon optimizer that significantly reduces optimizer update time by batching Newton–Schulz iterations across parameters with identical shapes.
+
+Muon is well known for its strong token efficiency, but its update step can become a noticeable bottleneck in certain training workloads. This is especially true when training relatively small models with fast forward passes and a large number of parameters optimized by Muon. In such cases, the optimizer update may take a comparable amount of time to the forward and backward passes combined.
+
+For example, in one of my training workloads, the forward pass took roughly 200 ms per step, while the Muon update implemented in existing repositories consumed another ~200 ms. In contrast, a standard AdamW update required only a few milliseconds. Under these conditions, the optimizer overhead substantially reduces the practical training efficiency of Muon.
+
+FasterMuon addresses this issue with a simple idea: parameters sharing the same shape are grouped together and processed using batched Newton–Schulz iterations. By replacing many small matrix operations with larger batched operations, the optimizer can make much better use of GPU parallelism and significantly reduce update latency.
+
+The speedup is most noticeable when:
+
+* The model has a relatively fast forward/backward pass.
+* A large number of parameters are optimized using Muon.
+* Many of those parameters share identical shapes.
+
+In workloads matching these characteristics, FasterMuon can substantially reduce optimizer overhead and improve overall training throughput.
+
+More implementation details can be found directly in the source code.
+
+**Note:** The current implementation has only been tested under Distributed Data Parallel (DDP) training. Other parallel training strategies may require additional modifications.

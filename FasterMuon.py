@@ -31,7 +31,7 @@ from collections import defaultdict
 import torch
 from torch import Tensor
  
-__all__ = ["FasterMuon"]
+__all__ = ["Muon"]
  
 # @torch.compile
 def _zeropower_via_newtonschulz5_single(
@@ -82,11 +82,11 @@ def _zeropower_via_newtonschulz5_batched(
     return X
  
  
-class FasterMuon(torch.optim.Optimizer):
+class Muon(torch.optim.Optimizer):
     """
     Muon 优化器，按参数形状分组后用 bmm 批量做 Newton-Schulz 正交化。
  
-    只负责 Muon（==2D，隐藏层权重）那部分参数。其它的bias、norm、embedding、
+    只负责 Muon（>=2D，隐藏层权重）那部分参数。bias、norm、embedding、
     lm_head 这些请照常配一个独立的 torch.optim.AdamW，用法和官方 Muon
     实现完全一致。
     """
@@ -94,7 +94,7 @@ class FasterMuon(torch.optim.Optimizer):
     def __init__(
         self,
         params,
-        lr: float = 2e-2,
+        lr: float = 1e-3,
         momentum: float = 0.95,
         nesterov: bool = True,
         weight_decay: float = 0.1,
@@ -105,7 +105,7 @@ class FasterMuon(torch.optim.Optimizer):
         for p in params:
             if p.ndim != 2:
                 raise ValueError(
-                    f"FasterMuon 只支持 2D 参数，但收到了形状 {tuple(p.shape)}"
+                    f"FastMuon 只支持 2D 参数，但收到了形状 {tuple(p.shape)}"
                 )
         defaults = dict(
             lr=lr,
@@ -150,9 +150,11 @@ class FasterMuon(torch.optim.Optimizer):
                     state["momentum_buffer"] = torch.zeros_like(g)
                 bufs.append(state["momentum_buffer"])
  
-            torch._foreach_lerp_(bufs, grads, 1 - momentum)
+            # torch._foreach_lerp_(bufs, grads, 1 - momentum)
+            torch._foreach_mul_(bufs, momentum)
+            torch._foreach_add_(bufs, grads)
             if nesterov:
-                updates = torch._foreach_lerp(grads, bufs, momentum)
+                updates = torch._foreach_add_(grads, bufs, alpha=momentum)
             else:
                 updates = [b.clone() for b in bufs]
  
